@@ -10,10 +10,10 @@ import (
 
 const (
 	foodNetworkLinkSelector     = "li.m-PromoList__a-ListItem a[href]"
-	foodNetworkNextPageSelector = "a[href].o-Pagination__a-NextButton"
+	foodNetworkNextPageSelector = "a[href].o-Pagination__a-NextButton:not(.is-Disabled)"
 	foodNetworkCategorySelector = "h3.o-Capsule__a-Headline"
 	// foodNetworkNextCategorySelector = "ul.o-IndexPagination__m-List"
-	foodNetworkBaseLink = "https://www.foodnetwork.com/recipes/a-z/"
+	foodNetworkBaseLink = "https://www.foodnetwork.com/recipes/recipes-a-z/"
 )
 
 type FoodNetworkLinkSource struct {
@@ -22,7 +22,7 @@ type FoodNetworkLinkSource struct {
 	categorySelector css.Selector
 }
 
-func NewFoodNetworkLinkSource() *FoodNetworkLinkSource {
+func NewFoodnetworkLinkSource() *FoodNetworkLinkSource {
 	return &FoodNetworkLinkSource{
 		linkSelector:     css.MustCompile(foodNetworkLinkSelector),
 		nextPageSelector: css.MustCompile(foodNetworkNextPageSelector),
@@ -37,7 +37,7 @@ func (f FoodNetworkLinkSource) GetLinks(node *html.Node) (*LinkPage, error) {
 	for i, linkNode := range linkNodes {
 		for _, attr := range linkNode.Attr {
 			if attr.Key == "href" {
-				links[i] = attr.Val
+				links[i] = "https:" + attr.Val
 			}
 		}
 	}
@@ -49,7 +49,7 @@ func (f FoodNetworkLinkSource) GetLinks(node *html.Node) (*LinkPage, error) {
 			if attr.Key == "href" {
 				return &LinkPage{
 					Links:    links,
-					NextPage: attr.Val,
+					NextPage: "https:" + attr.Val,
 				}, nil
 			}
 		}
@@ -67,9 +67,15 @@ func (f FoodNetworkLinkSource) GetLinks(node *html.Node) (*LinkPage, error) {
 	}
 
 	if category != "" {
+		// Try to get next category, if there is none return ""
+		nextPage := nextCategory(category)
+		if nextPage != "" {
+			nextPage = foodNetworkBaseLink + nextPage
+		}
+
 		return &LinkPage{
 			Links:    links,
-			NextPage: foodNetworkBaseLink + strings.ToLower(nextCategory(category)),
+			NextPage: nextPage,
 		}, nil
 	}
 
@@ -78,14 +84,14 @@ func (f FoodNetworkLinkSource) GetLinks(node *html.Node) (*LinkPage, error) {
 
 // NextCategory returns the next category to parse.
 func nextCategory(cat string) string {
-	switch cat {
+	switch strings.ToLower(cat) {
 	case "":
 		return "123"
 	case "123":
-		return "A"
-	case "W":
-		return "XYZ"
-	case "XYZ":
+		return "a"
+	case "w":
+		return "xyz"
+	case "xyz":
 		return ""
 	default:
 		bytes := []byte(cat)

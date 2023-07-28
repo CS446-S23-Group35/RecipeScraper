@@ -3,6 +3,7 @@ package parser
 import (
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/CS446-S23-Group35/RecipeScraper/pkg/recipe"
 	css "github.com/andybalholm/cascadia"
@@ -26,7 +27,7 @@ const (
 
 // Some helper selectors, REs and map.
 var (
-	foodNetworkTimeRE   = regexp.MustCompile(`((\d+) hr )?((\d+) min)?$`)
+	foodNetworkTimeRE   = regexp.MustCompile(`((\d+) hr)? ?((\d+) min)?$`)
 	foodnetworkLevelMap = map[string]recipe.RecipeDifficulty{
 		"Easy":         recipe.Easy,
 		"Medium":       recipe.Medium,
@@ -163,10 +164,11 @@ func (p *FoodnetworkParser) parseTimeString(text string) (int, error) {
 }
 
 // parseServings parses a string like "4 to 6 servings" into a ServingRange struct.
-func (p *FoodnetworkParser) parseServings(text string) (recipe.ServingRange, error) {
+func (p *FoodnetworkParser) parseServings(text string) recipe.ServingRange {
 	matches := foodnetworkYieldRE.FindStringSubmatch(text)
 	if matches == nil {
-		return recipe.ServingRange{}, ErrParseFailed{Field: "yield string"}
+		// if there is no match, just return the text as the alternative
+		return recipe.ServingRange{Alternative: text}
 	}
 
 	// group 2 is min, group 5 is max. If group 2 is empty, set it to group 5
@@ -179,12 +181,11 @@ func (p *FoodnetworkParser) parseServings(text string) (recipe.ServingRange, err
 	// know they are ints
 	min, _ := strconv.Atoi(minStr)
 	max, _ := strconv.Atoi(maxStr)
-	return recipe.ServingRange{Min: min, Max: max}, nil
+	return recipe.ServingRange{Min: min, Max: max}
 }
 
 // parseRecipeMetadata parses the metadata of a recipe.
 func (p *FoodnetworkParser) parseRecipeMetadata(node *html.Node) (recipe.RecipeMetadata, error) {
-	var err error
 	metadata := recipe.RecipeMetadata{EstimatedCalories: -1}
 
 	// parse the difficulty, time, and yield. The place where certain metadata is located is not consistent,
@@ -228,10 +229,8 @@ func (p *FoodnetworkParser) parseRecipeMetadata(node *html.Node) (recipe.RecipeM
 			metadata.MinutesToCook = time
 
 		case "Yield:":
-			metadata.Servings, err = p.parseServings(text)
-			if err != nil {
-				return metadata, err
-			}
+			metadata.Servings = p.parseServings(text)
+
 		default:
 			// Skip unknown headlines
 		}
@@ -246,12 +245,13 @@ func (p *FoodnetworkParser) parseRecipeMetadata(node *html.Node) (recipe.RecipeM
 	metadata.Tags = tags
 
 	// Parse the image and alt text.
-	// The selector will handle the case where there is no image.
 	imageNode := p.imageSelector.MatchFirst(node)
 	if imageNode != nil {
 		for _, attr := range imageNode.Attr {
 			if attr.Key == "src" {
-				metadata.ImageURL = attr.Val
+				if !strings.HasSuffix(attr.Val, "1474463768097.jpeg") {
+					metadata.ImageURL = "https:" + attr.Val
+				}
 			}
 			if attr.Key == "alt" {
 				metadata.ImageAlt = attr.Val
