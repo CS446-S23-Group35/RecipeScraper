@@ -1,6 +1,8 @@
 package linksource
 
-import "golang.org/x/net/html"
+import (
+	"golang.org/x/net/html"
+)
 
 // LinkPage is a struct that contains a list of links and the link to
 // the next page link.
